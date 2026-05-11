@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TODO App</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f4f4f5;
+      color: #18181b;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    #container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      color: #09090b;
+    }
+
+    #todo-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    #task-input {
+      flex: 1;
+      padding: 0.6rem 0.875rem;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #task-input:focus {
+      border-color: #6366f1;
+    }
+
+    #add-btn {
+      padding: 0.6rem 1.25rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #add-btn:hover {
+      background: #4f46e5;
+    }
+
+    #todo-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: #fff;
+      border: 1px solid #e4e4e7;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+    }
+
+    .todo-item input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: #6366f1;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .todo-item .todo-text {
+      flex: 1;
+      font-size: 1rem;
+    }
+
+    .todo-item.done .todo-text {
+      text-decoration: line-through;
+      color: #a1a1aa;
+    }
+
+    .todo-item .delete-btn {
+      background: none;
+      border: none;
+      color: #a1a1aa;
+      font-size: 1.1rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 0.25rem;
+      transition: color 0.15s;
+    }
+
+    .todo-item .delete-btn:hover {
+      color: #ef4444;
+    }
+
+    #empty-msg {
+      text-align: center;
+      color: #a1a1aa;
+      font-size: 0.95rem;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>TODO App</h1>
+    <form id="todo-form">
+      <input id="todo-input" type="text" placeholder="Nova tasca..." autocomplete="off">
+      <button type="submit" id="add-btn">Afegir</button>
+    </form>
+    <ul id="todo-list"></ul>
+    <p id="empty-msg">No hi ha tasques. Afegeix-ne una!</p>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+services:
+  ia-curs:
+    container_name: ia-curs
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    environment:
+      LLM_API_URL: http://host.docker.internal:1234/v1/chat/completions
+    volumes:
+      - ./sources:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/http.d/default.conf:ro
+    ports:
+      - 8080:80

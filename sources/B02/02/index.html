@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <title>biPeek — Anàlisi de feedback</title>
+  <style>
+    body { font-family: sans-serif; max-width: 560px; margin: 60px auto; }
+    textarea, button, pre { display: block; width: 100%; margin: 8px 0; }
+    textarea { height: 120px; padding: 8px; font-size: 1rem; }
+    button { padding: 10px; background: #2563eb; color: white; border: none; cursor: pointer; }
+    button:disabled { background: #93c5fd; }
+    pre { background: #f5f5f5; padding: 16px; white-space: pre-wrap; min-height: 80px; }
+    #status { color: #6b7280; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h2>Anàlisi de feedback d'esdeveniment</h2>
+  <textarea id="feedback" placeholder="Enganxa aquí el feedback dels assistents..."></textarea>
+  <button id="btn" onclick="submit()">Analitza en segon pla</button>
+  <p id="status"></p>
+  <pre id="result">El resultat apareixerà aquí...</pre>
+
+  <script>
+    let pollInterval = null;
+
+    async function submit() {
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      document.getElementById('status').textContent = 'Job encuat...';
+      document.getElementById('result').textContent = '';
+
+      const res  = await fetch('analyse.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback: document.getElementById('feedback').value }),
+      });
+      const data = await res.json();
+
+      // Polling cada 2 segons fins que el job acabi
+      pollInterval = setInterval(() => poll(data.job_id, btn), 2000);
+    }
+
+    async function poll(jobId, btn) {
+      const res  = await fetch(`status.php?job_id=${jobId}`);
+      const data = await res.json();
+
+      document.getElementById('status').textContent = `Estat: ${data.status}`;
+
+      if (data.status === 'done') {
+        clearInterval(pollInterval);
+        document.getElementById('result').textContent = data.result;
+        btn.disabled = false;
+        btn.textContent = 'Analitza en segon pla';
+      } else if (data.status === 'failed') {
+        clearInterval(pollInterval);
+        document.getElementById('result').textContent = data.result ?? 'El job ha fallat.';
+        btn.disabled = false;
+        btn.textContent = 'Analitza en segon pla';
+      }
+    }
+  </script>
+</body>
+</html>
