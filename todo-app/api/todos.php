@@ -2,112 +2,113 @@
 
 header('Content-Type: application/json');
 
-$dataFile = __DIR__ . '/../data/todos.json';
+$DATA_FILE = __DIR__ . '/../data/todos.json';
+$DATA_DIR  = dirname($DATA_FILE);
 
-// --- Helpers ---
-
-function loadTodos(string $dataFile): array {
-    if (!file_exists($dataFile)) {
-        return [];
-    }
-    $raw = file_get_contents($dataFile);
-    $decoded = json_decode($raw, true);
-    // Reinitialize if corrupt
-    if (!is_array($decoded)) {
-        return [];
-    }
-    return $decoded;
-}
-
-function saveTodos(string $dataFile, array $todos): void {
-    $dir = dirname($dataFile);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
-    }
-    file_put_contents($dataFile, json_encode(array_values($todos), JSON_PRETTY_PRINT));
-}
-
-function generateUuid(): string {
-    // UUID v4 using random_bytes
-    $bytes = random_bytes(16);
-    $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40); // version 4
-    $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80); // variant bits
-    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
-}
-
-function respond(mixed $data, int $status = 200): never {
-    http_response_code($status);
-    echo json_encode($data);
+function fail(int $code, string $msg): void {
+    http_response_code($code);
+    echo json_encode(['error' => $msg]);
     exit;
 }
 
-// --- Routing ---
+function uuidv4(): string {
+    $b = random_bytes(16);
+    $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+    $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+}
 
-$method = $_SERVER['REQUEST_METHOD'];
-$id     = $_GET['id'] ?? null;
+function load_todos(string $file): array {
+    if (!file_exists($file)) return [];
+    $raw = @file_get_contents($file);
+    if ($raw === false || $raw === '') return [];
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
+}
 
-switch ($method) {
+function save_todos(string $file, array $todos): void {
+    if (file_put_contents($file, json_encode(array_values($todos), JSON_PRETTY_PRINT)) === false) {
+        fail(500, 'No s\'ha pogut escriure el fitxer');
+    }
+}
 
-    case 'GET':
-        $todos = loadTodos($dataFile);
-        respond(array_values($todos));
+function read_json_body(): array {
+    $raw = file_get_contents('php://input');
+    if ($raw === '' || $raw === false) return [];
+    $data = json_decode($raw, true);
+    if (!is_array($data)) fail(400, 'JSON invàlid');
+    return $data;
+}
 
-    case 'POST':
-        $body = json_decode(file_get_contents('php://input'), true);
-        $text = trim($body['text'] ?? '');
+try {
+    if (!is_dir($DATA_DIR)) {
+        if (!@mkdir($DATA_DIR, 0775, true) && !is_dir($DATA_DIR)) {
+            fail(500, 'No s\'ha pogut crear el directori de dades');
+        }
+    }
 
-        if ($text === '') {
-            respond(['error' => 'Text is required'], 400);
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $todos  = load_todos($DATA_FILE);
+
+    switch ($method) {
+        case 'GET':
+            echo json_encode(array_values($todos));
+            break;
+
+        case 'POST': {
+            $body = read_json_body();
+            $text = isset($body['text']) ? trim((string)$body['text']) : '';
+            if ($text === '') fail(400, 'El camp "text" és obligatori');
+
+            $todo = [
+                'id'         => uuidv4(),
+                'text'       => $text,
+                'done'       => false,
+                'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
+            ];
+            $todos[] = $todo;
+            save_todos($DATA_FILE, $todos);
+            http_response_code(201);
+            echo json_encode($todo);
+            break;
         }
 
-        $todo = [
-            'id'         => generateUuid(),
-            'text'       => $text,
-            'done'       => false,
-            'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
-        ];
+        case 'PATCH': {
+            $id = $_GET['id'] ?? '';
+            if ($id === '') fail(400, 'Falta el paràmetre "id"');
+            $body = read_json_body();
+            if (!array_key_exists('done', $body)) fail(400, 'El camp "done" és obligatori');
 
-        $todos   = loadTodos($dataFile);
-        $todos[] = $todo;
-        saveTodos($dataFile, $todos);
-
-        respond($todo, 201);
-
-    case 'PATCH':
-        $todos = loadTodos($dataFile);
-        $found = false;
-        $updated = null;
-
-        foreach ($todos as &$todo) {
-            if ($todo['id'] === $id) {
-                $todo['done'] = !$todo['done'];
-                $updated = $todo;
-                $found = true;
-                break;
+            $found = false;
+            foreach ($todos as &$t) {
+                if (($t['id'] ?? null) === $id) {
+                    $t['done'] = (bool)$body['done'];
+                    $found = true;
+                    $updated = $t;
+                    break;
+                }
             }
-        }
-        unset($todo);
-
-        if (!$found) {
-            respond(['error' => 'Todo not found'], 404);
-        }
-
-        saveTodos($dataFile, $todos);
-        respond($updated);
-
-    case 'DELETE':
-        $todos = loadTodos($dataFile);
-        $initialCount = count($todos);
-
-        $todos = array_filter($todos, fn($t) => $t['id'] !== $id);
-
-        if (count($todos) === $initialCount) {
-            respond(['error' => 'Todo not found'], 404);
+            unset($t);
+            if (!$found) fail(404, 'Todo no trobat');
+            save_todos($DATA_FILE, $todos);
+            echo json_encode($updated);
+            break;
         }
 
-        saveTodos($dataFile, $todos);
-        respond(['ok' => true]);
+        case 'DELETE': {
+            $id = $_GET['id'] ?? '';
+            if ($id === '') fail(400, 'Falta el paràmetre "id"');
 
-    default:
-        respond(['error' => 'Method not allowed'], 405);
+            $new = array_values(array_filter($todos, fn($t) => ($t['id'] ?? null) !== $id));
+            if (count($new) === count($todos)) fail(404, 'Todo no trobat');
+            save_todos($DATA_FILE, $new);
+            echo json_encode(['ok' => true]);
+            break;
+        }
+
+        default:
+            fail(405, 'Mètode no permès');
+    }
+} catch (Throwable $e) {
+    fail(500, $e->getMessage());
 }

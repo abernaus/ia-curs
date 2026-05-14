@@ -1,91 +1,97 @@
-// app.js — Vanilla JS client for the TODO app
-// Talks to /api/todos.php (GET, POST, PATCH, DELETE)
-
+// TODO app - JS vanilla, sense frameworks
 const API = '/api/todos.php';
+const listEl = document.getElementById('todos');
+const formEl = document.getElementById('add-form');
+const inputEl = document.getElementById('add-input');
+const errorEl = document.getElementById('error');
 
-async function fetchTodos() {
-  const res = await fetch(API);
-  if (!res.ok) throw new Error('Failed to fetch todos');
-  return res.json();
+function showError(msg) {
+  errorEl.textContent = msg || '';
 }
 
-function renderTodos(todos) {
-  var list = document.getElementById('todo-list');
-  var emptyMsg = document.getElementById('empty-msg');
-  list.innerHTML = '';
+async function api(method, url, body) {
+  try {
+    const opts = { method, headers: {} };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    // DELETE pot no tenir cos
+    const ct = res.headers.get('Content-Type') || '';
+    return ct.includes('application/json') ? await res.json() : null;
+  } catch (err) {
+    showError('Error API: ' + err.message);
+    throw err;
+  }
+}
 
-  emptyMsg.style.display = todos.length === 0 ? '' : 'none';
+function render(todos) {
+  // Buidem amb DOM, sense innerHTML
+  while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
 
-  todos.forEach(function (todo) {
-    var li = document.createElement('li');
-    li.className = 'todo-item' + (todo.done ? ' done' : '');
+  for (const t of todos) {
+    const li = document.createElement('li');
+    if (t.done) li.classList.add('done');
 
-    var checkbox = document.createElement('input');
+    const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.checked = !!todo.done;
-    checkbox.addEventListener('change', function () {
-      toggleTodo(todo.id);
-    });
+    checkbox.checked = !!t.done;
+    checkbox.addEventListener('change', () => toggle(t));
 
-    var span = document.createElement('span');
-    span.className = 'todo-text';
-    span.textContent = todo.text;
+    const span = document.createElement('span');
+    span.className = 'text';
+    span.textContent = t.text; // textContent contra XSS
 
-    var deleteBtn = document.createElement('button');
-    deleteBtn.className = 'delete-btn';
-    deleteBtn.textContent = '\u00D7';
-    deleteBtn.addEventListener('click', function () {
-      deleteTodo(todo.id);
-    });
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete';
+    delBtn.type = 'button';
+    delBtn.textContent = 'Eliminar';
+    delBtn.addEventListener('click', () => remove(t));
 
     li.appendChild(checkbox);
     li.appendChild(span);
-    li.appendChild(deleteBtn);
-    list.appendChild(li);
-  });
+    li.appendChild(delBtn);
+    listEl.appendChild(li);
+  }
 }
 
-async function loadAndRender() {
-  const todos = await fetchTodos();
-  renderTodos(todos);
+async function load() {
+  showError('');
+  const todos = await api('GET', API);
+  render(todos || []);
 }
 
-async function addTodo(text) {
-  const res = await fetch(API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text }),
-  });
-  if (!res.ok) throw new Error('Failed to add todo');
+async function add(text) {
+  showError('');
+  await api('POST', API, { text });
+  await load();
 }
 
-async function toggleTodo(id) {
-  const res = await fetch(API + '?id=' + encodeURIComponent(id), {
-    method: 'PATCH',
-  });
-  if (!res.ok) throw new Error('Failed to toggle todo');
-  await loadAndRender();
+async function toggle(t) {
+  showError('');
+  await api('PATCH', `${API}?id=${encodeURIComponent(t.id)}`, { done: !t.done });
+  await load();
 }
 
-async function deleteTodo(id) {
-  const res = await fetch(API + '?id=' + encodeURIComponent(id), {
-    method: 'DELETE',
-  });
-  if (!res.ok) throw new Error('Failed to delete todo');
-  await loadAndRender();
+async function remove(t) {
+  showError('');
+  await api('DELETE', `${API}?id=${encodeURIComponent(t.id)}`);
+  await load();
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  loadAndRender();
+formEl.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = inputEl.value.trim();
+  if (!text) return;
+  inputEl.value = '';
+  add(text).catch(() => {});
+});
 
-  const form = document.getElementById('todo-form');
-  form.addEventListener('submit', async function (e) {
-    e.preventDefault();
-    const input = document.getElementById('todo-input');
-    const text = input.value.trim();
-    if (!text) return; // Do not POST empty text
-    await addTodo(text);
-    input.value = '';
-    await loadAndRender();
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  load().catch(() => {});
 });
